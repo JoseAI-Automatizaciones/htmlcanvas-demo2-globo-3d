@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Globo 3D con noticias legibles — HTML-in-Canvas</title>
+  <title>Globo 3D legible por IA — HTML-in-Canvas</title>
   <link rel="icon" href="data:," />
 
   <!-- ORIGIN TRIAL: registra https://TU-DEMO.vercel.app en
@@ -22,29 +22,44 @@
   </script>
 
   <style>
-    :root { --bg:#06080c; --warm:#e8622c; --cool:#22d3ee; --txt:#e7ecf1; --muted:#8b97a3; }
+    :root { --bg:#06080c; --warm:#e8622c; --cool:#22d3ee; --txt:#e7ecf1; --muted:#8b97a3; --ok:#45d483; --bad:#ff5d6c; }
     * { box-sizing: border-box; }
     html, body { margin:0; height:100%; background:var(--bg); color:var(--txt);
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
     #scene { position:fixed; inset:0; display:block; }
-    .hud { position:fixed; top:22px; left:22px; max-width:340px; z-index:10; pointer-events:none; }
+
+    .hud { position:fixed; top:22px; left:22px; max-width:330px; z-index:10; pointer-events:none; }
     .hud .eyebrow { text-transform:uppercase; letter-spacing:.18em; font-size:11px; color:var(--cool); }
-    .hud h1 { font-size:24px; margin:6px 0 8px; line-height:1.15; }
+    .hud h1 { font-size:22px; margin:6px 0 8px; line-height:1.15; }
     .hud p { color:var(--muted); font-size:13px; margin:0; }
 
-    /* Botones de país: HTML normal, clics 100% confiables */
-    #picker { position:fixed; bottom:64px; left:50%; transform:translateX(-50%); z-index:10;
-      display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+    /* Panel de control de la "prueba" */
+    .panel-ui { position:fixed; top:22px; right:22px; z-index:10; width:320px;
+      background:rgba(10,15,23,.9); border:1px solid #2b3a4d; border-radius:14px; padding:16px; }
+    .panel-ui .row { display:flex; gap:8px; margin-bottom:12px; }
+    .seg { flex:1; cursor:pointer; border:1px solid #2b3a4d; background:transparent; color:var(--muted);
+      padding:9px 8px; border-radius:9px; font-size:12px; font-family:inherit; line-height:1.2; }
+    .seg.active.html { border-color:var(--ok); color:var(--ok); background:rgba(69,212,131,.1); }
+    .seg.active.trad { border-color:var(--bad); color:var(--bad); background:rgba(255,93,108,.1); }
+    .ai-btn { width:100%; cursor:pointer; border:0; background:var(--warm); color:#fff;
+      padding:11px; border-radius:9px; font-size:14px; font-weight:600; font-family:inherit; }
+    .readout { margin-top:12px; background:#000; border:1px solid #1d2731; border-radius:9px;
+      padding:11px 12px; font-size:12px; min-height:54px; }
+    .readout .lbl { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.1em; margin-bottom:6px; }
+    .readout pre { margin:0; white-space:pre-wrap; word-break:break-word;
+      font-family:ui-monospace,monospace; color:var(--ok); font-size:11.5px; }
+    .readout.empty pre { color:var(--bad); }
+    .tip { color:var(--muted); font-size:11px; margin-top:10px; line-height:1.45; }
+    .tip b { color:var(--cool); }
+
+    #picker { position:fixed; bottom:54px; left:50%; transform:translateX(-50%); z-index:10;
+      display:flex; gap:9px; flex-wrap:wrap; justify-content:center; }
     #picker button { cursor:pointer; border:1px solid #2b3a4d; background:rgba(15,24,38,.85);
-      color:var(--txt); padding:9px 16px; border-radius:999px; font-size:14px; font-family:inherit; }
-    #picker button:hover { border-color:var(--warm); }
+      color:var(--txt); padding:8px 15px; border-radius:999px; font-size:13px; font-family:inherit; }
     #picker button.active { background:var(--warm); border-color:var(--warm); color:#fff; }
+    #banner { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:10;
+      font-size:11px; color:var(--muted); } #banner code{color:var(--cool);}
 
-    #banner { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:10;
-      font-size:12px; color:var(--muted); text-align:center; }
-    #banner code { color:var(--cool); }
-
-    /* Fuente HTML real -> textura 3D. Offscreen pero presente en el DOM (legible/indexable). */
     #news-sources { position:absolute; left:-10000px; top:0; width:440px; }
     .news-panel { width:440px; height:380px; padding:28px; border-radius:20px;
       background:linear-gradient(165deg,#0f1826,#0a0f17); border:1px solid #2b4159; color:var(--txt); }
@@ -59,9 +74,19 @@
 <body>
   <div class="hud">
     <div class="eyebrow">HTML-in-Canvas · Demo 2</div>
-    <h1>Un globo 3D donde la IA puede leer las noticias</h1>
-    <p>El panel flotante es <b>HTML real</b> renderizado dentro de WebGL: texto
-    seleccionable, accesible e indexable — no una imagen. Elige un país abajo.</p>
+    <h1>¿Puede una IA leer dentro de un mundo 3D?</h1>
+    <p>El panel flota en WebGL. Cambia cómo se dibuja y pídele a la "IA" que lo
+    lea. Solo uno de los dos modos es legible — esa es toda la diferencia.</p>
+  </div>
+
+  <div class="panel-ui">
+    <div class="row">
+      <button class="seg html active" id="seg-html">HTML-in-Canvas ✅<br><span style="opacity:.7">texto real</span></button>
+      <button class="seg trad" id="seg-trad">Canvas tradicional ❌<br><span style="opacity:.7">solo píxeles</span></button>
+    </div>
+    <button class="ai-btn" id="ai-btn">🤖 Que la IA lea el panel</button>
+    <div class="readout" id="readout"><div class="lbl">Lo que la IA extrajo del panel 3D:</div><pre id="readout-pre">— presiona el botón —</pre></div>
+    <div class="tip" id="tip"><b>Pruébalo tú:</b> arrastra el cursor sobre el texto del panel 3D para seleccionarlo. En modo HTML se resalta (es texto real); en modo Canvas, no pasa nada.</div>
   </div>
 
   <canvas id="scene"></canvas>
@@ -69,7 +94,6 @@
   <div id="picker"></div>
   <div id="banner">Three.js + <code>HTML-in-Canvas</code> · <span id="mode">detectando…</span></div>
 
-  <!-- HTML real que alimenta la textura (offscreen, en el DOM) -->
   <div id="news-sources">
     <div class="news-panel" id="panel">
       <div class="flag" id="p-flag">🌐</div>
@@ -88,8 +112,7 @@
     const native = typeof CanvasRenderingContext2D.prototype.drawElementImage === 'function';
     installHtmlInCanvasPolyfill();
     document.getElementById('mode').textContent = native
-      ? 'modo nativo (Origin Trial activo)'
-      : 'modo polyfill (activa el Origin Trial para la versión nativa)';
+      ? 'modo nativo (Origin Trial activo)' : 'modo polyfill';
 
     const CITIES = [
       { key:'co', lat:4.7,  lon:-74.1, flag:'🇨🇴', country:'Colombia', loc:'Bogotá', news:['El peso se fortalece tras nuevos datos de inflación.','Aprobado corredor de transporte eléctrico en la capital.','Startups locales de IA levantan ronda semilla récord.'] },
@@ -102,93 +125,107 @@
     const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
-
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x06080c);
-
     const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
-    function frameCamera(){
-      camera.aspect = innerWidth/innerHeight;
-      camera.position.set(0, 0.6, camera.aspect < 1.1 ? 12 : 8.5);
-      camera.updateProjectionMatrix();
-    }
+    function frameCamera(){ camera.aspect = innerWidth/innerHeight;
+      camera.position.set(0, 0.6, camera.aspect < 1.1 ? 12 : 8.5); camera.updateProjectionMatrix(); }
     frameCamera();
-
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.target.set(0.4, 0, 0);
+    controls.enableDamping = true; controls.target.set(0.4,0,0);
     controls.minDistance = 5; controls.maxDistance = 16;
-
     scene.add(new THREE.AmbientLight(0x335577, 1.4));
     const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(-4,3,5); scene.add(key);
 
-    // Globo a la izquierda
-    const globeGroup = new THREE.Group();
-    globeGroup.position.x = -2.4;
-    scene.add(globeGroup);
+    const globeGroup = new THREE.Group(); globeGroup.position.x = -2.4; scene.add(globeGroup);
     const R = 1.8;
-    globeGroup.add(new THREE.Mesh(
-      new THREE.SphereGeometry(R, 64, 64),
-      new THREE.MeshStandardMaterial({ color:0x103049, roughness:.85, metalness:.1, emissive:0x06121f })
-    ));
-    globeGroup.add(new THREE.Mesh(
-      new THREE.SphereGeometry(R+0.01, 32, 32),
-      new THREE.MeshBasicMaterial({ color:0x29708f, wireframe:true, transparent:true, opacity:.2 })
-    ));
-
-    function toVec(lat, lon, r){
-      const phi=(90-lat)*Math.PI/180, theta=(lon+180)*Math.PI/180;
-      return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta));
-    }
+    globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(R,64,64),
+      new THREE.MeshStandardMaterial({ color:0x103049, roughness:.85, metalness:.1, emissive:0x06121f })));
+    globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(R+0.01,32,32),
+      new THREE.MeshBasicMaterial({ color:0x29708f, wireframe:true, transparent:true, opacity:.2 })));
+    function toVec(lat, lon, r){ const phi=(90-lat)*Math.PI/180, theta=(lon+180)*Math.PI/180;
+      return new THREE.Vector3(-r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta)); }
     const markerMat = new THREE.MeshBasicMaterial({ color:0xe8622c });
     const markerActive = new THREE.MeshBasicMaterial({ color:0x22d3ee });
     const markers = {};
-    CITIES.forEach(c => {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.08,16,16), markerMat);
-      m.position.copy(toVec(c.lat, c.lon, R+0.05));
-      globeGroup.add(m); markers[c.key] = m;
-    });
+    CITIES.forEach(c => { const m=new THREE.Mesh(new THREE.SphereGeometry(0.08,16,16), markerMat);
+      m.position.copy(toVec(c.lat,c.lon,R+0.05)); globeGroup.add(m); markers[c.key]=m; });
 
-    // Panel HTML como textura 3D, centrado-derecha, siempre mirando a cámara
+    // --- Plano A: HTML real (HTMLTexture) ---
     const panelEl = document.getElementById('panel');
-    const panelTex = new THREE.HTMLTexture(panelEl);
+    const htmlTex = new THREE.HTMLTexture(panelEl);
     const ratio = panelEl.offsetHeight / panelEl.offsetWidth || (380/440);
-    const PW = 3.2;
-    const panelMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(PW, PW * ratio),
-      new THREE.MeshBasicMaterial({ map: panelTex, transparent:true })
-    );
-    panelMesh.position.set(2.6, 0.2, 0);
-    scene.add(panelMesh);
+    const PW = 3.2, geo = new THREE.PlaneGeometry(PW, PW*ratio);
+    const htmlMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map:htmlTex, transparent:true }));
+    htmlMesh.position.set(2.6, 0.2, 0); scene.add(htmlMesh);
 
-    const picker = document.getElementById('picker');
-    function selectCity(c){
-      document.getElementById('p-flag').textContent = c.flag;
-      document.getElementById('p-country').textContent = c.country;
-      document.getElementById('p-loc').textContent = c.loc;
-      const ul = document.getElementById('p-list'); ul.innerHTML = '';
-      c.news.forEach(n => { const li=document.createElement('li'); li.textContent=n; ul.appendChild(li); });
-      Object.values(markers).forEach(m => m.material = markerMat);
-      if (markers[c.key]) markers[c.key].material = markerActive;
-      [...picker.children].forEach(b => b.classList.toggle('active', b.dataset.k === c.key));
-      panelTex.needsUpdate = true;
+    // --- Plano B: Canvas tradicional (fillText = solo píxeles) ---
+    const tc = document.createElement('canvas'); tc.width=440; tc.height=380;
+    const tcx = tc.getContext('2d');
+    const tradTex = new THREE.CanvasTexture(tc);
+    const tradMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map:tradTex, transparent:true }));
+    tradMesh.position.copy(htmlMesh.position); tradMesh.visible = false; scene.add(tradMesh);
+
+    function drawTrad(c){
+      tcx.clearRect(0,0,440,380);
+      tcx.fillStyle='#0c1320'; tcx.fillRect(0,0,440,380);
+      tcx.fillStyle='#fff'; tcx.font='40px sans-serif'; tcx.fillText(c.flag,28,60);
+      tcx.font='bold 26px sans-serif'; tcx.fillText(c.country,28,108);
+      tcx.fillStyle='#22d3ee'; tcx.font='13px sans-serif'; tcx.fillText(c.loc.toUpperCase(),28,134);
+      tcx.fillStyle='#e7ecf1'; tcx.font='15px sans-serif';
+      c.news.forEach((n,i)=>{ wrap(n, 28, 176 + i*54, 384, 20); });
+      tcx.fillStyle='#8b97a3'; tcx.font='11px sans-serif'; tcx.fillText('Datos de muestra · demo educativo',28,360);
+      tradTex.needsUpdate = true;
     }
-    CITIES.forEach(c => {
-      const b = document.createElement('button');
-      b.textContent = c.flag + ' ' + c.loc; b.dataset.k = c.key;
-      b.onclick = () => selectCity(c);
-      picker.appendChild(b);
-    });
-    selectCity(CITIES[0]); // muestra Bogotá por defecto
+    function wrap(text,x,y,maxW,lh){ const words=text.split(' '); let line='',yy=y;
+      for(const w of words){ const t=line+w+' '; if(tcx.measureText(t).width>maxW){ tcx.fillText(line,x,yy); line=w+' '; yy+=lh; } else line=t; } tcx.fillText(line,x,yy); }
 
-    addEventListener('resize', () => { frameCamera(); renderer.setSize(innerWidth, innerHeight); });
+    // --- Estado / selección ---
+    let mode='html', current=CITIES[0];
+    const picker=document.getElementById('picker');
+    function selectCity(c){ current=c;
+      document.getElementById('p-flag').textContent=c.flag;
+      document.getElementById('p-country').textContent=c.country;
+      document.getElementById('p-loc').textContent=c.loc;
+      const ul=document.getElementById('p-list'); ul.innerHTML='';
+      c.news.forEach(n=>{ const li=document.createElement('li'); li.textContent=n; ul.appendChild(li); });
+      htmlTex.needsUpdate=true; drawTrad(c);
+      Object.values(markers).forEach(m=>m.material=markerMat);
+      if(markers[c.key]) markers[c.key].material=markerActive;
+      [...picker.children].forEach(b=>b.classList.toggle('active', b.dataset.k===c.key));
+    }
+    CITIES.forEach(c=>{ const b=document.createElement('button');
+      b.textContent=c.flag+' '+c.loc; b.dataset.k=c.key; b.onclick=()=>selectCity(c); picker.appendChild(b); });
 
-    renderer.setAnimationLoop((t) => {
-      globeGroup.rotation.y = t * 0.00008;
-      panelMesh.lookAt(camera.position); // siempre legible
-      controls.update();
-      renderer.render(scene, camera);
-    });
+    function setMode(m){ mode=m;
+      htmlMesh.visible = m==='html'; tradMesh.visible = m==='trad';
+      document.getElementById('seg-html').classList.toggle('active', m==='html');
+      document.getElementById('seg-trad').classList.toggle('active', m==='trad');
+      document.getElementById('readout-pre').textContent='— presiona el botón —';
+      document.getElementById('readout').classList.remove('empty');
+    }
+    document.getElementById('seg-html').onclick=()=>setMode('html');
+    document.getElementById('seg-trad').onclick=()=>setMode('trad');
+
+    // --- La "IA" lee el panel 3D ---
+    document.getElementById('ai-btn').onclick=()=>{
+      const ro=document.getElementById('readout'), pre=document.getElementById('readout-pre');
+      if(mode==='html'){
+        // El texto vive en el DOM bajo la textura -> extraíble por agentes/buscadores
+        ro.classList.remove('empty');
+        pre.textContent='✅ '+panelEl.innerText.trim().replace(/\n{2,}/g,'\n');
+      } else {
+        // Canvas tradicional: no hay DOM, solo píxeles
+        ro.classList.add('empty');
+        pre.textContent='❌ Sin datos. El canvas tradicional es solo una imagen:\n   ctx.fillText(...) no deja texto que un agente pueda leer.';
+      }
+    };
+
+    selectCity(CITIES[0]); setMode('html');
+    addEventListener('resize', ()=>{ frameCamera(); renderer.setSize(innerWidth,innerHeight); });
+    renderer.setAnimationLoop((t)=>{ globeGroup.rotation.y=t*0.00008;
+      htmlMesh.lookAt(camera.position); tradMesh.lookAt(camera.position);
+      controls.update(); renderer.render(scene,camera); });
   </script>
 </body>
 </html>
